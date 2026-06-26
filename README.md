@@ -82,12 +82,12 @@ An AI-powered internal copilot for digital finance support agents. It reads cust
 2. **Set environment variables (optional — works without LLM key using rule-based fallback):**
    ```bash
    # Linux/Mac
-   export OPENAI_API_KEY=your_gemini_api_key_here
-   export MODEL_NAME=gemini-2.0-flash
+   export OPENAI_API_KEY=your_groq_api_key_here
+   export MODEL_NAME=llama-3.1-70b-versatile
 
    # Windows PowerShell
-   $env:OPENAI_API_KEY="your_gemini_api_key_here"
-   $env:MODEL_NAME="gemini-2.0-flash"
+   $env:OPENAI_API_KEY="your_groq_api_key_here"
+   $env:MODEL_NAME="llama-3.1-70b-versatile"
    ```
 
 3. **Build and run:**
@@ -121,8 +121,8 @@ docker build -t bkash-spy .
 ### Run
 ```bash
 docker run -p 8000:8000 \
-  -e OPENAI_API_KEY=your_gemini_api_key_here \
-  -e MODEL_NAME=gemini-2.0-flash \
+  -e OPENAI_API_KEY=your_groq_api_key_here \
+  -e MODEL_NAME=llama-3.1-70b-versatile \
   bkash-spy
 ```
 
@@ -203,7 +203,7 @@ See [sample_output.json](./sample_output.json) for a complete example.
 
 | Model | Where it runs | Why chosen |
 |-------|--------------|------------|
-| Google Gemini 2.0 Flash (free tier) | External API (Google AI Studio) | Free, fast, accurate JSON output, supports structured reasoning via OpenAI-compatible endpoint |
+| LLaMA 3.1 70B (via Groq) | External API (Groq Cloud) | Ultra-fast inference, accurate JSON output, excellent reasoning capabilities via OpenAI-compatible endpoint |
 | Rule-Based Engine (built-in) | Locally in the service | Zero-latency fallback, ensures 100% uptime even if LLM API fails |
 
 ### Approach: Hybrid Rule + AI (Recommended by organizers)
@@ -213,7 +213,7 @@ See [sample_output.json](./sample_output.json) for a complete example.
 - **Post-processing:** A Safety Interceptor scans all LLM output for violations before returning it.
 
 ### Cost
-- Gemini 2.0 Flash: **Free** (Google AI Studio free tier)
+- Groq LLaMA 3.1: **Free** (Groq Cloud free tier)
 - Rule-based fallback: $0 (no external calls)
 
 ---
