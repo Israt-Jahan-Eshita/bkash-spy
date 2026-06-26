@@ -42,9 +42,9 @@ public class TicketAnalyzerService {
 
     public TicketAnalyzerService(
             ObjectMapper objectMapper,
-            @Value("${OPENAI_API_URL:https://api.openai.com/v1/chat/completions}") String llmApiUrl,
+            @Value("${OPENAI_API_URL:https://generativelanguage.googleapis.com/v1beta/openai/chat/completions}") String llmApiUrl,
             @Value("${OPENAI_API_KEY:}") String llmApiKey,
-            @Value("${MODEL_NAME:gpt-4o-mini}") String modelName) {
+            @Value("${MODEL_NAME:gemini-2.0-flash}") String modelName) {
         this.objectMapper = objectMapper;
         this.llmApiUrl = llmApiUrl;
         this.llmApiKey = llmApiKey;
