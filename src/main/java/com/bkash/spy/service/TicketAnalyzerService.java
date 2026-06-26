@@ -7,7 +7,6 @@ import com.bkash.spy.enums.CaseType;
 import com.bkash.spy.enums.Department;
 import com.bkash.spy.enums.EvidenceVerdict;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -19,9 +18,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-@Slf4j
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Service
 public class TicketAnalyzerService {
+
+    private static final Logger log = LoggerFactory.getLogger(TicketAnalyzerService.class);
 
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
