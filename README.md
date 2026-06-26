@@ -156,8 +156,6 @@ docker run -p 8000:8000 --env-file .env bkash-spy
 
 ## Sample Request & Response
 
-See [sample_output.json](./sample_output.json) for a complete example.
-
 ### Request
 ```json
 {
