@@ -201,7 +201,7 @@ docker run -p 8000:8000 --env-file .env bkash-spy
 
 | Model | Where it runs | Why chosen |
 |-------|--------------|------------|
-| LLaMA 3.1 70B (via Groq) | External API (Groq Cloud) | Ultra-fast inference, accurate JSON output, excellent reasoning capabilities via OpenAI-compatible endpoint |
+| LLaMA 3.3 70B (via Groq) | External API (Groq Cloud) | Ultra-fast inference, accurate JSON output, excellent reasoning capabilities via OpenAI-compatible endpoint |
 | Rule-Based Engine (built-in) | Locally in the service | Zero-latency fallback, ensures 100% uptime even if LLM API fails |
 
 ### Approach: Hybrid Rule + AI (Recommended by organizers)
@@ -211,7 +211,7 @@ docker run -p 8000:8000 --env-file .env bkash-spy
 - **Post-processing:** A Safety Interceptor scans all LLM output for violations before returning it.
 
 ### Cost
-- Groq LLaMA 3.1: **Free** (Groq Cloud free tier)
+- Groq LLaMA 3.3: **Free** (Groq Cloud free tier)
 - Rule-based fallback: $0 (no external calls)
 
 ---
