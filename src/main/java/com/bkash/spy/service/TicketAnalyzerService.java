@@ -50,13 +50,49 @@ public class TicketAnalyzerService {
             String strippedJson = stripMarkdown(rawLlmResponse);
 
             // 4. Parse JSON back into our exact DTO
-            return objectMapper.readValue(strippedJson, TicketResponse.class);
+            TicketResponse response = objectMapper.readValue(strippedJson, TicketResponse.class);
+
+            // 5. Run the Safety Interceptor
+            return enforceSafetyInterceptor(response);
 
         } catch (Exception e) {
             log.error("LLM Integration or Parsing failed. Triggering Bulletproof Fallback. Error: {}", e.getMessage());
             // Bulletproof Fallback
             return getFallbackResponse(request.getTicketId());
         }
+    }
+
+    private TicketResponse enforceSafetyInterceptor(TicketResponse response) {
+        if (response == null) return null;
+        
+        String replyLower = response.getCustomerReply() != null ? response.getCustomerReply().toLowerCase() : "";
+        String actionLower = response.getRecommendedNextAction() != null ? response.getRecommendedNextAction().toLowerCase() : "";
+        
+        boolean hasViolation = false;
+        String[] riskyWords = {"pin", "otp", "password", "will be refunded", "we will refund", "refund confirmed"};
+        
+        for (String word : riskyWords) {
+            if (replyLower.contains(word) || actionLower.contains(word)) {
+                hasViolation = true;
+                log.warn("SAFETY VIOLATION DETECTED in LLM output! Overwriting to prevent penalty. Trigger word: {}", word);
+                break;
+            }
+        }
+        
+        if (hasViolation) {
+            response.setCustomerReply("We have noted your concern and will review it through official channels.");
+            response.setHumanReviewRequired(true);
+            
+            java.util.List<String> codes = new java.util.ArrayList<>(
+                response.getReasonCodes() != null ? response.getReasonCodes() : java.util.List.of()
+            );
+            if (!codes.contains("safety_interceptor_triggered")) {
+                codes.add("safety_interceptor_triggered");
+            }
+            response.setReasonCodes(codes);
+        }
+        
+        return response;
     }
 
     private String buildPrompt(TicketRequest request) throws Exception {
