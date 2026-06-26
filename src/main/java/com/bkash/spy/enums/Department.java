@@ -5,10 +5,10 @@ import com.fasterxml.jackson.annotation.JsonValue;
 public enum Department {
     CUSTOMER_SUPPORT("customer_support"),
     DISPUTE_RESOLUTION("dispute_resolution"),
-    FRAUD_RISK("fraud_risk"),
-    TECHNICAL_SUPPORT("technical_support"),
-    ACCOUNT_MANAGEMENT("account_management"),
-    OTHER("other");
+    PAYMENTS_OPS("payments_ops"),
+    MERCHANT_OPERATIONS("merchant_operations"),
+    AGENT_OPERATIONS("agent_operations"),
+    FRAUD_RISK("fraud_risk");
 
     private final String value;
 
