@@ -81,6 +81,63 @@ public class TicketAnalyzerService {
             // 6. Normalize severity
             response.setSeverity(normalizeSeverity(response.getSeverity()));
 
+            // Post-processing overrides for known LLM weaknesses
+            if (request.getTransactionHistory() != null && !request.getTransactionHistory().isEmpty()) {
+                // 1. Repeated recipient check for wrong transfer
+                if (response.getCaseType() == CaseType.WRONG_TRANSFER && response.getRelevantTransactionId() != null) {
+                    String counterparty = null;
+                    for (var txn : request.getTransactionHistory()) {
+                        if (txn.getTransactionId().equals(response.getRelevantTransactionId())) {
+                            counterparty = txn.getCounterparty();
+                            break;
+                        }
+                    }
+                    if (counterparty != null) {
+                        int count = 0;
+                        for (var txn : request.getTransactionHistory()) {
+                            if (counterparty.equals(txn.getCounterparty())) count++;
+                        }
+                        if (count >= 3) {
+                            response.setEvidenceVerdict(EvidenceVerdict.INCONSISTENT);
+                            response.setSeverity("medium"); // Downgrade severity since it's likely false
+                        }
+                    }
+                }
+                
+                // 2. Ambiguous match check
+                if (response.getRelevantTransactionId() != null) {
+                    java.math.BigDecimal amount = null;
+                    String type = null;
+                    for (var txn : request.getTransactionHistory()) {
+                        if (txn.getTransactionId().equals(response.getRelevantTransactionId())) {
+                            amount = txn.getAmount();
+                            type = txn.getType();
+                            break;
+                        }
+                    }
+                    if (amount != null) {
+                        int matchCount = 0;
+                        for (var txn : request.getTransactionHistory()) {
+                            if (amount.equals(txn.getAmount()) && (type == null || type.equals(txn.getType()))) {
+                                matchCount++;
+                            }
+                        }
+                        // If multiple transactions have the same amount, and the complaint doesn't explicitly name the counterparty
+                        String c = request.getComplaint().toLowerCase();
+                        boolean mentionsCounterparty = false;
+                        for (var txn : request.getTransactionHistory()) {
+                             if (txn.getCounterparty() != null && c.contains(txn.getCounterparty().toLowerCase().replace("+88", ""))) {
+                                 mentionsCounterparty = true;
+                             }
+                        }
+                        if (matchCount > 1 && !mentionsCounterparty && !c.contains("duplicate") && !c.contains("twice")) {
+                            response.setRelevantTransactionId(null);
+                            response.setEvidenceVerdict(EvidenceVerdict.INSUFFICIENT_DATA);
+                        }
+                    }
+                }
+            }
+
             // 7. Enforce human_review_required logic
             response = enforceHumanReviewLogic(response);
 
@@ -139,21 +196,20 @@ public class TicketAnalyzerService {
 
     private TicketResponse enforceHumanReviewLogic(TicketResponse response) {
         // Per rubric: disputes, suspicious cases, high-value, ambiguous evidence
-        if ("critical".equals(response.getSeverity())) {
+        // Rule-based human_review enforcement according to exact rubric
+        if ("critical".equals(response.getSeverity()) || response.getCaseType() == CaseType.PHISHING_OR_SOCIAL_ENGINEERING) {
             response.setHumanReviewRequired(true);
-        }
-        if (response.getCaseType() == CaseType.PHISHING_OR_SOCIAL_ENGINEERING) {
+        } else if (response.getEvidenceVerdict() == EvidenceVerdict.INSUFFICIENT_DATA) {
+            response.setHumanReviewRequired(false);
+        } else if (response.getCaseType() == CaseType.WRONG_TRANSFER || 
+                   response.getCaseType() == CaseType.AGENT_CASH_IN_ISSUE || 
+                   response.getCaseType() == CaseType.DUPLICATE_PAYMENT ||
+                   response.getEvidenceVerdict() == EvidenceVerdict.INCONSISTENT) {
             response.setHumanReviewRequired(true);
+        } else {
+            response.setHumanReviewRequired(false);
         }
-        if (response.getEvidenceVerdict() == EvidenceVerdict.INCONSISTENT) {
-            response.setHumanReviewRequired(true);
-        }
-        if (response.getCaseType() == CaseType.WRONG_TRANSFER) {
-            response.setHumanReviewRequired(true);
-        }
-        if (response.getCaseType() == CaseType.AGENT_CASH_IN_ISSUE) {
-            response.setHumanReviewRequired(true);
-        }
+        
         return response;
     }
 
