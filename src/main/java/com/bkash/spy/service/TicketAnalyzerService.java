@@ -222,16 +222,15 @@ You are a financial support AI copilot for a digital finance platform (like bKas
 
 ## INPUT
 """ + requestJson + """
-
 ## OUTPUT FORMAT
 Return exactly this JSON structure:
 {
   "ticket_id": "...",
   "relevant_transaction_id": "TXN-ID or null",
   "evidence_verdict": "consistent|inconsistent|insufficient_data",
-  "case_type": "one of the 8 values above",
-  "severity": "low|medium|high|critical",
-  "department": "one of the 6 values above",
+  "case_type": "[Enum: wrong_transfer | cash_out_issue | account_compromise | phishing_or_social_engineering | payment_failure | merchant_dispute | app_bug | other]",
+  "severity": "[Enum: low | medium | high | critical]",
+  "department": "[Enum: dispute_resolution | fraud_risk | customer_support | technical_support | account_management | other]",
   "agent_summary": "1-2 sentence neutral summary for the agent",
   "recommended_next_action": "what the agent should do next",
   "customer_reply": "safe professional reply to the customer",
@@ -239,7 +238,8 @@ Return exactly this JSON structure:
   "confidence": 0.0 to 1.0,
   "reason_codes": ["short", "reason", "labels"]
 }
-""";
+## INPUT
+""" + requestJson;
     }
 
     // ========================== LLM API CALL ==========================
@@ -288,223 +288,61 @@ Return exactly this JSON structure:
 
     private TicketResponse getRuleBasedResponse(TicketRequest request) {
         String complaint = request.getComplaint() != null ? request.getComplaint().toLowerCase() : "";
-        List<TransactionDto> history = request.getTransactionHistory();
-
-        // --- Step 1: Classify the case_type ---
-        CaseType caseType;
-        String severity;
-        Department department;
-
-        if (containsAny(complaint, "otp", "pin", "password", "scam", "fraud", "suspicious call",
-                "someone called", "asking for my", "fake", "phishing", "social engineering")) {
-            caseType = CaseType.PHISHING_OR_SOCIAL_ENGINEERING;
-            severity = "critical";
-            department = Department.FRAUD_RISK;
-        } else if (containsAny(complaint, "wrong number", "wrong account", "wrong person",
-                "sent to wrong", "wrong recipient", "mistakenly sent", "accidental transfer", "wrong transfer")) {
-            caseType = CaseType.WRONG_TRANSFER;
-            severity = "high";
-            department = Department.DISPUTE_RESOLUTION;
-        } else if (containsAny(complaint, "payment failed", "failed transaction", "transaction failed",
-                "deducted but", "balance deducted", "money deducted", "did not go through",
-                "didn't go through", "not successful", "failed but")) {
-            caseType = CaseType.PAYMENT_FAILED;
-            severity = "high";
-            department = Department.PAYMENTS_OPS;
-        } else if (containsAny(complaint, "duplicate", "charged twice", "double charge",
-                "paid twice", "two times", "charged two")) {
-            caseType = CaseType.DUPLICATE_PAYMENT;
-            severity = "high";
-            department = Department.PAYMENTS_OPS;
-        } else if (containsAny(complaint, "settlement", "merchant", "not received settlement",
-                "merchant payment", "merchant settlement")) {
-            caseType = CaseType.MERCHANT_SETTLEMENT_DELAY;
-            severity = "medium";
-            department = Department.MERCHANT_OPERATIONS;
-        } else if (containsAny(complaint, "agent", "cash in", "cash-in", "deposit",
-                "agent deposit", "not reflected", "agent cash")) {
-            caseType = CaseType.AGENT_CASH_IN_ISSUE;
-            severity = "medium";
-            department = Department.AGENT_OPERATIONS;
-        } else if (containsAny(complaint, "refund", "money back", "return my money",
-                "changed my mind", "cancel", "want back")) {
-            caseType = CaseType.REFUND_REQUEST;
-            severity = "low";
-            department = Department.CUSTOMER_SUPPORT;
-        } else {
-            caseType = CaseType.OTHER;
-            severity = "low";
-            department = Department.CUSTOMER_SUPPORT;
-        }
-
-        // --- Step 2: Evidence Matching ---
-        String relevantTxnId = null;
-        EvidenceVerdict verdict = EvidenceVerdict.INSUFFICIENT_DATA;
-
-        if (history != null && !history.isEmpty()) {
-            // Try to find the best matching transaction
-            TransactionDto bestMatch = findBestMatchingTransaction(complaint, history, caseType);
-            if (bestMatch != null) {
-                relevantTxnId = bestMatch.getTransactionId();
-                verdict = determineVerdict(complaint, bestMatch, caseType);
-            }
-        }
-
-        // --- Step 3: Build human_review_required ---
-        boolean humanReview = "critical".equals(severity)
-                || caseType == CaseType.PHISHING_OR_SOCIAL_ENGINEERING
-                || caseType == CaseType.WRONG_TRANSFER
-                || verdict == EvidenceVerdict.INCONSISTENT;
-
-        // --- Step 4: Build safe summaries ---
-        String agentSummary = buildAgentSummary(caseType, relevantTxnId, complaint);
-        String nextAction = buildNextAction(caseType, relevantTxnId);
-        String customerReply = buildSafeCustomerReply(caseType);
-
-        // --- Step 5: Build reason codes ---
-        List<String> reasonCodes = new ArrayList<>();
-        reasonCodes.add(caseType.getValue());
-        if (relevantTxnId != null) reasonCodes.add("transaction_match");
-        if (verdict == EvidenceVerdict.INCONSISTENT) reasonCodes.add("evidence_mismatch");
-        reasonCodes.add("rule_based_classification");
-
-        TicketResponse response = TicketResponse.builder()
+        TicketResponse res = TicketResponse.builder()
                 .ticketId(request.getTicketId())
-                .relevantTransactionId(relevantTxnId)
-                .evidenceVerdict(verdict)
-                .caseType(caseType)
-                .severity(severity)
-                .department(department)
-                .agentSummary(agentSummary)
-                .recommendedNextAction(nextAction)
-                .customerReply(customerReply)
-                .humanReviewRequired(humanReview)
-                .confidence(0.75)
-                .reasonCodes(reasonCodes)
+                .reasonCodes(new ArrayList<>())
                 .build();
 
-        return enforceSafetyInterceptor(response);
-    }
-
-    // ========================== EVIDENCE MATCHING HELPERS ==========================
-
-    private TransactionDto findBestMatchingTransaction(String complaint, List<TransactionDto> history, CaseType caseType) {
-        if (history == null || history.isEmpty()) return null;
-
-        // Strategy: Try to match by type first, then by amount mentioned in complaint
-        for (TransactionDto txn : history) {
-            String txnType = txn.getType() != null ? txn.getType().toLowerCase() : "";
-
-            switch (caseType) {
-                case WRONG_TRANSFER:
-                    if ("transfer".equals(txnType)) return txn;
-                    break;
-                case PAYMENT_FAILED:
-                    if ("payment".equals(txnType)) return txn;
-                    break;
-                case REFUND_REQUEST:
-                    if ("payment".equals(txnType) || "transfer".equals(txnType)) return txn;
-                    break;
-                case DUPLICATE_PAYMENT:
-                    if ("payment".equals(txnType)) return txn;
-                    break;
-                case MERCHANT_SETTLEMENT_DELAY:
-                    if ("settlement".equals(txnType)) return txn;
-                    break;
-                case AGENT_CASH_IN_ISSUE:
-                    if ("cash_in".equals(txnType)) return txn;
-                    break;
-                default:
-                    break;
-            }
+        if (complaint.contains("pin") || complaint.contains("password") || complaint.contains("hacked") || complaint.contains("stolen") || complaint.contains("fraud") || complaint.contains("scam") || complaint.contains("compromise")) {
+            res.setCaseType(CaseType.ACCOUNT_COMPROMISE);
+            res.setSeverity("critical");
+            res.setDepartment(Department.FRAUD_RISK);
+            res.setAgentSummary("Customer account may be compromised or targeted by fraud.");
+            res.setRecommendedNextAction("Freeze account temporarily and escalate to fraud investigation.");
+            res.setHumanReviewRequired(true);
+        } else if (complaint.contains("wrong number") || complaint.contains("wrong account") || complaint.contains("mistake") || complaint.contains("incorrect")) {
+            res.setCaseType(CaseType.WRONG_TRANSFER);
+            res.setSeverity("high");
+            res.setDepartment(Department.DISPUTE_RESOLUTION);
+            res.setAgentSummary("Customer reports a transfer to an incorrect recipient.");
+            res.setRecommendedNextAction("Verify transaction and initiate dispute resolution.");
+            res.setHumanReviewRequired(true);
+        } else if (complaint.contains("cash out") || complaint.contains("agent") || complaint.contains("withdraw")) {
+            res.setCaseType(CaseType.CASH_OUT_ISSUE);
+            res.setSeverity("high");
+            res.setDepartment(Department.DISPUTE_RESOLUTION);
+            res.setAgentSummary("Customer reports an issue with a cash out transaction.");
+            res.setRecommendedNextAction("Verify agent details and investigate cash out status.");
+            res.setHumanReviewRequired(true);
+        } else if (complaint.contains("bug") || complaint.contains("app crash") || complaint.contains("not loading") || complaint.contains("error")) {
+            res.setCaseType(CaseType.APP_BUG);
+            res.setSeverity("medium");
+            res.setDepartment(Department.TECHNICAL_SUPPORT);
+            res.setAgentSummary("Customer is experiencing technical issues with the application.");
+            res.setRecommendedNextAction("Escalate to technical support for bug triage.");
+            res.setHumanReviewRequired(false);
+        } else if (complaint.contains("merchant") || complaint.contains("payment") || complaint.contains("failed") || complaint.contains("didn't go through")) {
+            res.setCaseType(CaseType.PAYMENT_FAILURE);
+            res.setSeverity("medium");
+            res.setDepartment(Department.TECHNICAL_SUPPORT);
+            res.setAgentSummary("Customer reports a failed payment or merchant issue.");
+            res.setRecommendedNextAction("Check payment gateway logs and verify merchant settlement.");
+            res.setHumanReviewRequired(false);
+        } else {
+            res.setCaseType(CaseType.OTHER);
+            res.setSeverity("low");
+            res.setDepartment(Department.CUSTOMER_SUPPORT);
+            res.setAgentSummary("Customer submitted a general query or issue.");
+            res.setRecommendedNextAction("Review and route to appropriate team.");
+            res.setHumanReviewRequired(false);
         }
 
-        // If no type match, return the most recent transaction as best guess
-        return history.get(0);
-    }
+        res.setEvidenceVerdict(EvidenceVerdict.INSUFFICIENT_DATA);
+        res.setCustomerReply("We have received your complaint and it is being reviewed by our team. Any eligible resolution will be processed through official channels. For further assistance, please contact our official support.");
+        res.setConfidence(0.75);
+        res.getReasonCodes().add("rule_based_classification");
 
-    private EvidenceVerdict determineVerdict(String complaint, TransactionDto txn, CaseType caseType) {
-        String status = txn.getStatus() != null ? txn.getStatus().toLowerCase() : "";
-
-        // Payment failed but transaction shows completed → inconsistent
-        if (caseType == CaseType.PAYMENT_FAILED && "completed".equals(status)) {
-            return EvidenceVerdict.INCONSISTENT;
-        }
-
-        // Wrong transfer with a completed transfer → consistent
-        if (caseType == CaseType.WRONG_TRANSFER && "transfer".equalsIgnoreCase(txn.getType()) && "completed".equals(status)) {
-            return EvidenceVerdict.CONSISTENT;
-        }
-
-        // Payment failed and status is actually failed → consistent
-        if (caseType == CaseType.PAYMENT_FAILED && "failed".equals(status)) {
-            return EvidenceVerdict.CONSISTENT;
-        }
-
-        // Refund request with a completed transaction → consistent (there is something to refund)
-        if (caseType == CaseType.REFUND_REQUEST && "completed".equals(status)) {
-            return EvidenceVerdict.CONSISTENT;
-        }
-
-        // Transaction was already reversed → inconsistent with new refund/dispute
-        if ("reversed".equals(status) && (caseType == CaseType.REFUND_REQUEST || caseType == CaseType.WRONG_TRANSFER)) {
-            return EvidenceVerdict.INCONSISTENT;
-        }
-
-        // Default: if we have a transaction but can't fully confirm
-        return EvidenceVerdict.CONSISTENT;
-    }
-
-    // ========================== TEXT BUILDERS ==========================
-
-    private String buildAgentSummary(CaseType caseType, String txnId, String complaint) {
-        String txnRef = txnId != null ? " (Ref: " + txnId + ")" : "";
-        return switch (caseType) {
-            case WRONG_TRANSFER -> "Customer reports sending money to an incorrect recipient" + txnRef + ". Requires dispute investigation.";
-            case PAYMENT_FAILED -> "Customer reports a failed transaction with possible balance deduction" + txnRef + ". Needs payment operations review.";
-            case REFUND_REQUEST -> "Customer is requesting a refund for a previous transaction" + txnRef + ".";
-            case DUPLICATE_PAYMENT -> "Customer reports being charged multiple times for the same transaction" + txnRef + ". Needs payment reconciliation.";
-            case MERCHANT_SETTLEMENT_DELAY -> "Merchant reports delayed or missing settlement" + txnRef + ". Requires merchant operations review.";
-            case AGENT_CASH_IN_ISSUE -> "Customer reports a cash-in deposit through an agent that is not reflected in their balance" + txnRef + ".";
-            case PHISHING_OR_SOCIAL_ENGINEERING -> "Customer reports suspicious activity involving potential phishing or social engineering attempt. Immediate fraud review required.";
-            case OTHER -> "Customer has submitted a general inquiry or complaint that requires support attention" + txnRef + ".";
-        };
-    }
-
-    private String buildNextAction(CaseType caseType, String txnId) {
-        String txnRef = txnId != null ? " " + txnId : "";
-        return switch (caseType) {
-            case WRONG_TRANSFER -> "Verify transaction" + txnRef + " details with the customer and initiate dispute resolution process. Check recipient details.";
-            case PAYMENT_FAILED -> "Check transaction" + txnRef + " status in payment gateway. Verify if balance was deducted. If confirmed, initiate reversal through proper channels.";
-            case REFUND_REQUEST -> "Review transaction" + txnRef + " eligibility for refund per company policy. Process through official refund workflow if eligible.";
-            case DUPLICATE_PAYMENT -> "Check payment logs for duplicate entries around transaction" + txnRef + ". Cross-reference with merchant records.";
-            case MERCHANT_SETTLEMENT_DELAY -> "Check settlement batch status for" + txnRef + ". Verify merchant account details and settlement schedule.";
-            case AGENT_CASH_IN_ISSUE -> "Verify agent transaction records for" + txnRef + ". Cross-check with agent's ledger and customer balance history.";
-            case PHISHING_OR_SOCIAL_ENGINEERING -> "Flag account for fraud monitoring. Verify no unauthorized transactions have occurred. Advise customer on security best practices through official channels.";
-            case OTHER -> "Review the customer's complaint and respond through standard support workflow.";
-        };
-    }
-
-    private String buildSafeCustomerReply(CaseType caseType) {
-        return switch (caseType) {
-            case WRONG_TRANSFER -> "We have received your complaint regarding the incorrect transfer. Our dispute resolution team will review the transaction details. Any eligible recovery will be processed through official channels. Please do not share sensitive account information with anyone.";
-            case PAYMENT_FAILED -> "We understand your concern about the failed transaction. Our payments team is reviewing the matter. If any amount was incorrectly deducted, it will be addressed through our standard resolution process. For updates, please check your transaction history or contact our official support.";
-            case REFUND_REQUEST -> "We have noted your refund request. Our team will review the transaction and process any eligible refund through official channels according to our refund policy. You will be notified of the outcome.";
-            case DUPLICATE_PAYMENT -> "We have received your report about a possible duplicate charge. Our payments team will investigate and any eligible correction will be made through official channels.";
-            case MERCHANT_SETTLEMENT_DELAY -> "We acknowledge your concern about the settlement delay. Our merchant operations team is looking into this matter and will provide an update through official channels.";
-            case AGENT_CASH_IN_ISSUE -> "We have noted your concern about the cash-in transaction. Our agent operations team will verify the deposit and ensure any discrepancy is resolved through official channels.";
-            case PHISHING_OR_SOCIAL_ENGINEERING -> "Thank you for reporting this suspicious activity. Please remember that our official team will never ask for your sensitive credentials such as passwords or verification codes. If you have shared any such information, please change your credentials immediately through the official app. Our fraud team is reviewing this case.";
-            case OTHER -> "We have received your message and our support team will review it shortly. For any urgent matters, please contact our official customer support. Please do not share sensitive information with anyone claiming to represent us outside of official channels.";
-        };
-    }
-
-    // ========================== UTILITY ==========================
-
-    private boolean containsAny(String text, String... keywords) {
-        for (String keyword : keywords) {
-            if (text.contains(keyword)) return true;
-        }
-        return false;
+        return enforceSafetyInterceptor(res);
     }
 
     // ========================== LLM FALLBACK RESPONSE ==========================
