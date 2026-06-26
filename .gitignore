@@ -1,0 +1,47 @@
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+
+### VS Code ###
+.vscode/
+
+### Spring Boot / Maven ###
+target/
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+### Environment / Secrets ###
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+application-secret.properties
+application-secret.yml
+
+### OS Files ###
+.DS_Store
+Thumbs.db
