@@ -45,7 +45,7 @@ public class TicketAnalyzerService {
 
     public TicketAnalyzerService(
             ObjectMapper objectMapper,
-            @Value("${OPENAI_API_URL:https://api.groq.com/openai/v1/chat/completions}") String llmApiUrl,
+            @Value("${GROQ_API_URL:https://api.groq.com/openai/v1/chat/completions}") String llmApiUrl,
             @Value("${GROQ_API_KEY:}") String llmApiKey,
             @Value("${MODEL_NAME:llama-3.3-70b-versatile}") String modelName) {
         this.objectMapper = objectMapper;
