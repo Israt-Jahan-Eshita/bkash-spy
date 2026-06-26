@@ -82,12 +82,12 @@ An AI-powered internal copilot for digital finance support agents. It reads cust
 2. **Set environment variables (optional — works without LLM key using rule-based fallback):**
    ```bash
    # Linux/Mac
-   export OPENAI_API_KEY=your_groq_api_key_here
-   export MODEL_NAME=llama-3.1-70b-versatile
+   export GROQ_API_KEY=your_groq_api_key_here
+   export MODEL_NAME=llama-3.3-70b-versatile
 
    # Windows PowerShell
-   $env:OPENAI_API_KEY="your_groq_api_key_here"
-   $env:MODEL_NAME="llama-3.1-70b-versatile"
+   $env:GROQ_API_KEY="your_groq_api_key_here"
+   $env:MODEL_NAME="llama-3.3-70b-versatile"
    ```
 
 3. **Build and run:**
@@ -121,8 +121,8 @@ docker build -t bkash-spy .
 ### Run
 ```bash
 docker run -p 8000:8000 \
-  -e OPENAI_API_KEY=your_groq_api_key_here \
-  -e MODEL_NAME=llama-3.1-70b-versatile \
+  -e GROQ_API_KEY=your_groq_api_key_here \
+  -e MODEL_NAME=llama-3.3-70b-versatile \
   bkash-spy
 ```
 
